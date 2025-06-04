@@ -3,15 +3,27 @@
 import asyncio
 import httpx
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from httpkit.tools.proxy import app, startup_event, shutdown_event
 
 client = TestClient(app)
 
-def test_app_startup_initializes_globals():
+@patch("httpkit.tools.proxy.httpx.AsyncClient")
+def test_app_startup_initializes_globals(mock_client):
     """Test that the app startup event initializes global variables."""
+    # Setup mock client
+    mock_async_client = mock_client.return_value
+    
+    # Create a mock aclose coroutine
+    async def mock_aclose():
+        pass
+    
+    mock_async_client.aclose = mock_aclose
+    
     # Call the startup event handler directly
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     loop.run_until_complete(startup_event())
     
     # Import after initialization to get the updated values
@@ -24,6 +36,7 @@ def test_app_startup_initializes_globals():
     
     # Clean up
     loop.run_until_complete(shutdown_event())
+    loop.close()
 
 def test_root_endpoint():
     """Test the root endpoint."""

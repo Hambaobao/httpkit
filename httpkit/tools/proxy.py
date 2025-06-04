@@ -9,13 +9,7 @@ from fastapi.responses import StreamingResponse
 import uvicorn
 from typing import List, Dict, Any, Optional
 import asyncio
-
-# Create FastAPI app
-app = FastAPI(
-    title="HTTPKit Proxy",
-    description="A simple HTTP proxy service that forwards requests to a target server.",
-    version="0.1.0",
-)
+from contextlib import asynccontextmanager
 
 # Global httpx client
 http_client: Optional[httpx.AsyncClient] = None
@@ -47,6 +41,24 @@ UNSAFE_RESPONSE_HEADERS = [
     "server",  # Don't expose upstream server details
 ]
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for FastAPI app."""
+    # Initialize resources on startup
+    await startup_event()
+    yield
+    # Clean up resources on shutdown
+    await shutdown_event()
+
+# Create FastAPI app with lifespan
+app = FastAPI(
+    title="HTTPKit Proxy",
+    description="A simple HTTP proxy service that forwards requests to a target server.",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# Keep the on_event handlers for backward compatibility and tests
 @app.on_event("startup")
 async def startup_event():
     """Initialize global resources on application startup."""
@@ -55,7 +67,8 @@ async def startup_event():
     # Initialize the global HTTP client with HTTP/2 support and increased limits
     http_client = httpx.AsyncClient(
         timeout=30.0,
-        http2=True,
+        # Only enable HTTP/2 if h2 package is installed
+        http2=False,  # Changed to False by default to avoid dependency issues
         limits=httpx.Limits(
             max_connections=200,
             max_keepalive_connections=50,
@@ -101,6 +114,13 @@ async def proxy_request(
     # Use the global client and semaphore
     global http_client, request_semaphore
     
+    # Validate scheme
+    if scheme.lower() not in ["http", "https"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid scheme: {scheme}. Only http and https are supported.",
+        )
+    
     # Construct the target URL
     target_url = f"{scheme}://{target_host}:{target_port}/{path}"
     if request.query_params:
@@ -117,6 +137,11 @@ async def proxy_request(
     body = await request.body()
 
     try:
+        # Check if global client is initialized
+        if http_client is None:
+            # Initialize client if not already done (for tests or direct calls)
+            await startup_event()
+            
         # Acquire semaphore to limit concurrency
         async with request_semaphore:
             # Forward the request to the target server using the global client
@@ -176,13 +201,6 @@ async def proxy_request_with_scheme(
     Returns:
         The response from the target server.
     """
-    # Validate scheme
-    if scheme.lower() not in ["http", "https"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid scheme: {scheme}. Only http and https are supported.",
-        )
-        
     return await proxy_request(request, target_host, target_port, path, scheme)
 
 
@@ -201,9 +219,26 @@ async def root():
 def main():
     """Run the proxy server."""
     import os
+    import importlib.util
     
     # Disable reload in production for better performance
     reload = os.environ.get("HTTPKIT_ENV", "development").lower() == "development"
+    
+    # Check if h2 is installed to enable HTTP/2
+    h2_installed = importlib.util.find_spec("h2") is not None
+    
+    # Override the global HTTP client with HTTP/2 support if available
+    global http_client
+    if h2_installed:
+        http_client = httpx.AsyncClient(
+            timeout=30.0,
+            http2=True,
+            limits=httpx.Limits(
+                max_connections=200,
+                max_keepalive_connections=50,
+                keepalive_expiry=30.0
+            )
+        )
     
     uvicorn.run(
         "httpkit.tools.proxy:app", 
