@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "httpkit"
+version = "0.1.0"
+description = "HTTP toolkit for various HTTP-related utilities"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Hambaobao", email = "example@example.com" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "fastapi>=0.95.0",
+    "uvicorn>=0.21.0",
+    "httpx>=0.24.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Hambaobao/httpkit"
+"Bug Tracker" = "https://github.com/Hambaobao/httpkit/issues"
+
+[project.scripts]
+httpkit-proxy = "httpkit.tools.proxy:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["httpkit"]
