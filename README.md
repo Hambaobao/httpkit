@@ -1,5 +1,7 @@
 # HTTPKit
 
+[![Tests](https://github.com/Hambaobao/httpkit/actions/workflows/test.yml/badge.svg)](https://github.com/Hambaobao/httpkit/actions/workflows/test.yml)
+
 A collection of HTTP-related utilities and tools.
 
 ## Installation
